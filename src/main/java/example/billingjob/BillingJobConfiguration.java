@@ -24,6 +24,7 @@ import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilde
 import org.springframework.batch.item.database.builder.JdbcCursorItemReaderBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.FlatFileItemWriter;
+import org.springframework.batch.item.file.FlatFileParseException;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.file.builder.FlatFileItemWriterBuilder;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,17 +60,46 @@ public class BillingJobConfiguration {
                 .build();
     }
     
+//    @Bean
+//    public Step step2(
+//       JobRepository jobRepository, JdbcTransactionManager transactionManager,
+//       ItemReader<BillingData> billingDataFileReader, ItemWriter<BillingData> billingDataTableWriter) {
+//        return new StepBuilder("fileIngestion", jobRepository)
+//                .<BillingData, BillingData>chunk(100, transactionManager)
+//                .reader(billingDataFileReader)
+//                .writer(billingDataTableWriter)
+//                .build();
+//    }
+    
     @Bean
     public Step step2(
        JobRepository jobRepository, JdbcTransactionManager transactionManager,
-       ItemReader<BillingData> billingDataFileReader, ItemWriter<BillingData> billingDataTableWriter) {
+           ItemReader<BillingData> billingDataFileReader,
+           ItemWriter<BillingData> billingDataTableWriter,
+           BillingDataSkipListener skipListener) {
         return new StepBuilder("fileIngestion", jobRepository)
                 .<BillingData, BillingData>chunk(100, transactionManager)
                 .reader(billingDataFileReader)
                 .writer(billingDataTableWriter)
+                .faultTolerant()
+                .skip(FlatFileParseException.class)
+                .skipLimit(10)
+                .listener(skipListener)
                 .build();
     }
     
+//    @Bean
+//    public Step step3(JobRepository jobRepository, JdbcTransactionManager transactionManager,
+//                               ItemReader<BillingData> billingDataTableReader,
+//                               ItemProcessor<BillingData, ReportingData> billingDataProcessor,
+//                               ItemWriter<ReportingData> billingDataFileWriter) {
+//        return new StepBuilder("reportGeneration", jobRepository)
+//                .<BillingData, ReportingData>chunk(100, transactionManager)
+//                .reader(billingDataTableReader)
+//                .processor(billingDataProcessor)
+//                .writer(billingDataFileWriter)
+//                .build();
+//    }
     @Bean
     public Step step3(JobRepository jobRepository, JdbcTransactionManager transactionManager,
                                ItemReader<BillingData> billingDataTableReader,
@@ -80,6 +110,9 @@ public class BillingJobConfiguration {
                 .reader(billingDataTableReader)
                 .processor(billingDataProcessor)
                 .writer(billingDataFileWriter)
+                .faultTolerant()
+                .retry(PricingException.class)
+                .retryLimit(100)
                 .build();
     }
     
@@ -183,10 +216,16 @@ public class BillingJobConfiguration {
                 .build();
     }
     
+//    @Bean
+//    public BillingDataProcessor billingDataProcessor() {
+//        return new BillingDataProcessor();
+//    }
+    
     @Bean
-    public BillingDataProcessor billingDataProcessor() {
-        return new BillingDataProcessor();
+    public BillingDataProcessor billingDataProcessor(PricingService pricingService) {
+        return new BillingDataProcessor(pricingService);
     }
+    
 //    @Bean
 //    public FlatFileItemWriter<ReportingData> billingDataFileWriter() {
 //            return new FlatFileItemWriterBuilder<ReportingData>()
@@ -206,6 +245,12 @@ public class BillingJobConfiguration {
                 .delimited()
                 .names("billingData.dataYear", "billingData.dataMonth", "billingData.accountId", "billingData.phoneNumber", "billingData.dataUsage", "billingData.callDuration", "billingData.smsCount", "billingTotal")
                 .build();
+    }
+    
+    @Bean
+    @StepScope
+    public BillingDataSkipListener skipListener(@Value("#{jobParameters['skip.file']}") String skippedFile) {
+        return new BillingDataSkipListener(skippedFile);
     }
     
     

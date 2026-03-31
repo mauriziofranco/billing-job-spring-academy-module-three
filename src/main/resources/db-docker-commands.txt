@@ -36,6 +36,9 @@ docker exec postgres psql -f docker-db-schema-drop-postgree.sql -U postgres
 
 docker exec postgres psql -U postgres -c 'select count(*) from BILLING_DATA;'
 
+docker exec postgres psql -U postgres -c 'select job_instance_id, job_execution_id, status from BATCH_JOB_EXECUTION;'
+docker exec postgres psql -U postgres -c 'select step_execution_id, job_execution_id, step_name, status, read_count, write_count, commit_count, rollback_count  from BATCH_STEP_EXECUTION;'
+
 
 
 
